@@ -1,0 +1,16 @@
+html {
+    background-color: black;
+    color: grey;
+}
+table#status_output thead {
+    position: sticky;
+    top: 0;
+    background: black;
+}
+table#status_output th {
+    text-align: left;
+    border-bottom: 1px solid currentColor;
+}
+table#status_output td {
+    white-space: nowrap;
+}
