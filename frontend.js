@@ -44,8 +44,14 @@ function onChangeAddType(newValue){
 function onCreateField(){
     const { name, value } = state.createField;
     state.fields[name] = copy(value);
+
+    let isDupe = false;
+    if(state.controllers[name]){
+        state.controllers[name].destroy();
+        isDupe = true;
+    }
     state.controllers[name] = fieldsSection.add(state.fields, name);
-    log(`user added new field ${name}:${value}`);
+    log(`user ${isDupe?'overwrote existing':'added new'} field ${name}:${value}`);
 }
 
 function onFieldChange(event){
@@ -62,39 +68,60 @@ function onFieldChange(event){
 
 
 // Create WebSocket connection.
-const socket = new WebSocket("ws://localhost:8080");
-
-// Connection opened
-socket.addEventListener("open", (event) => {
-    log('Connected to server');
-    socket.send(JSON.stringify({name: "register-frontend"}));
-});
-
-socket.addEventListener("error", (event) => {
-    console.error('Websocket Error:', error);
-    log('Websocket Error:', event);
-});
-
-// Listen for messages
-socket.addEventListener("message", (event) => {
-    const {name, value} = JSON.parse(event.data);
-    // console.debug("Message from server ", name, value);
-
-    state.fields[name] = value;
-
-    if(!state.controllers[name]){
-        log(`got new field from server ${name}:${value}`);
-        state.controllers[name] = fieldsSection.add(state.fields, name);
-    }else{
-        state.controllers[name].updateDisplay();
+let socket, socketTimeout;
+startWS();
+function startWS(){
+    if(socket){
+        socket.close();
+        socket = null;
     }
+    socket = new WebSocket('ws://localhost:8080');
 
-});
+    // Connection opened
+    socket.addEventListener('open', (event) => {
+        log('Connected to server');
+        socket.send(JSON.stringify({ name: 'register-frontend' }));
+    });
+
+    // Socket Error
+    socket.addEventListener('error', (event) => {
+        console.error('Websocket Error:', event);
+        log('Websocket Error:', event.message || event.code || '(No message specified)');
+    });
+
+    // Socket Close
+    socket.addEventListener('close', (event) => {
+        console.error('Websocket Closed:', event);
+        log('Websocket Closed:', event.reason || event.code || '(No reason Specified)', 'Reconnecting...');
+        socket = null;
+        clearTimeout(socketTimeout);
+        socketTimeout = setTimeout(() => {
+            startWS();
+        }, 3000);
+    }); 
+
+    // Listen for messages from server
+    socket.addEventListener('message', (event) => {
+        const { name, value } = JSON.parse(event.data);
+        // console.debug('Message from server ', name, value);
+
+        state.fields[name] = value;
+
+        if (!state.controllers[name]) {
+            log(`got new field from server ${name}:${value}`);
+            state.controllers[name] = fieldsSection.add(state.fields, name);
+        } else {
+            state.controllers[name].updateDisplay();
+        }
+    });
+}
+
 
 const outputTable = document.querySelector('#status_output');
 const outputBody = outputTable.querySelector('tbody');
-function log(message){
-    outputBody.innerHTML = `<tr><td>${message}</td></tr>` + outputBody.innerHTML;
+function log(...message){
+    const str = message.join(' ');
+    outputBody.innerHTML = `<tr><td>${str}</td></tr>` + outputBody.innerHTML;
 }
 
 function copy(val){

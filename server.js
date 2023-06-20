@@ -21,20 +21,15 @@ udpPort.on('message', function (oscMsg, timeTag, info) {
         // consola.debug('An OSC message just arrived!', oscMsg);
         // consola.debug('Remote info is: ', info);
 
-        const argValue = oscMsg.args[0].value;
+        const name = oscMsg.address;
+        const value = oscMsg.args[0].value;
 
-        // switch(oscMsg.address){
-        //     case '/avatar/parameters/gamepad_button_a': {
-        //         consola.log('Got Button Press: A', argValue);
-        //         sendButton('/input/Jump', argValue);
-        //         break;
-        //     }
-        // }    
+        consola.debug('Got an OSC message from VRC:', {name, value});
 
         if(frontendWs){
             frontendWs.send(JSON.stringify({
-                name: oscMsg.address,
-                value: argValue,
+                name,
+                value,
             }));
         }
 
@@ -45,8 +40,7 @@ udpPort.on('message', function (oscMsg, timeTag, info) {
 
 // When the port is ready to receive messages
 udpPort.on('ready', function () {
-    consola.success('UDP Port is ready, waiting for messages from VRChat...');
-
+    consola.success(`UDP Port is ready, waiting for messages from VRChat on port ${recvPort}`);
 });
 
 // When an error is sent over the port
@@ -123,34 +117,38 @@ function clamp(val, min, max) {
 // Websocket API for Frontend
 const { WebSocketServer } = require('ws');
 
-const wss = new WebSocketServer({ port: 8080 });
+const wsPort = 8080;
+const wss = new WebSocketServer({ port: wsPort });
 let frontendWs = null;
 
 wss.on('connection', function connection(ws) {
     consola.info('a ws client has connected');
-    ws.on('error', console.error);
+    ws.on('error', (e)=>{
+        consola.error('Websocket error:', e);
+    });
 
     ws.on('message', function message(data) {
         const {name, value} = JSON.parse(data);
         if(name == 'register-frontend'){
-            consola.success('frontend has registered as ws client');
+            consola.success('ws client has registered as frontend');
             frontendWs = ws;
         }else{
-            consola.debug(`received: data on websocket`, name, value);
+            consola.debug(`received data from frontend`, name, value);
             sendAvatarParam(name, value);
         }
     });
 });
-
-consola.info('Websocket ready, waiting for connection from frontend...');
+wss.on('listening', ()=>{
+    consola.info('Websocket ready, waiting for connection from frontend...');
+});
 
 // Serve Frontend over HTTP
-const port = 8000;
+const httpPort = 8000;
 const path = require('path');
 const express = require('express');
 const app = express();
 app.use('/', express.static(path.join(__dirname,'dist')));
-app.listen(port, ()=> {
-    consola.success(`HTTP server ready, serving frontend at 'http://127.0.0.1:${port}/'`);
+app.listen(httpPort, ()=> {
+    consola.info(`HTTP server ready, serving frontend at 'http://127.0.0.1:${httpPort}/'`);
 });
 
